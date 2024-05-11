@@ -32,38 +32,38 @@ jobs:
       - name: Run tsts
         run: cargo test
     
-    fmt:
-      name: Rustfmt
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Enforce formatting
+        run: cargo fmt --check
+
+
+    clipy:
+      name: Clippy
       runs-on: ubuntu-latest
       steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
           with:
-            components: rustfmt
-        - name: Enforce formatting
-          run: cargo fmt --check
-
-
-      clipy:
-        name: Clippy
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@v4
-          - uses: dtolnay/rust-toolchain@stable
-            with:
-              components: clippy
-          - uses: Swatinem/rust-cache@v2
-          - name: Linting
-            run: cargo clippy -- -D warnings
-      
-      coverage:
-        name: Code coverage
-        runs-on: ubuntu-latest
-        container:
-          image: xd009642/tarpaulin
-          options: --security-opt seccomp=unconfirmed
-        steps:
-          - name: Check out repository
-            uses: actions/checkout@v4
-          - name: Generate code coverage
-            run: cargo tarpaulin --verbose --workspace
+            components: clippy
+        - uses: Swatinem/rust-cache@v2
+        - name: Linting
+          run: cargo clippy -- -D warnings
+    
+    coverage:
+      name: Code coverage
+      runs-on: ubuntu-latest
+      container:
+        image: xd009642/tarpaulin
+        options: --security-opt seccomp=unconfirmed
+      steps:
+        - name: Check out repository
+          uses: actions/checkout@v4
+        - name: Generate code coverage
+          run: cargo tarpaulin --verbose --workspace
