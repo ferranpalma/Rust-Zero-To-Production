@@ -435,6 +435,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "config-rs"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "409c47b3c2f79dd5aa7c01e08f5afee8722517566c24e4876c2637161013601b"
+dependencies = [
+ "nom",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2999,6 +3008,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "config",
+ "config-rs",
  "reqwest",
  "serde",
  "sqlx",
