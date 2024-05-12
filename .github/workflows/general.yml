@@ -14,11 +14,22 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  SQLX_VERSION: 0.7.4
+  SQLX_FEATURES: "rustls,postgres"
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          -5432:5432
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
@@ -29,7 +40,16 @@ jobs:
       - name: Rust cache action
         uses: Swatinem/rust-cache@v2
 
-      - name: Run tsts
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --locked --version=${{env.SQLX_VERSION}} --features ${{env.SQLX_FEATURES}}
+
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install postgresql-client -y
+
+      - name: Migrate database
+        run: SKIP_DOCKER=true ./scripts/initdb.sh
+
+      - name: Run tests
         run: cargo test
     
   fmt:
@@ -47,23 +67,57 @@ jobs:
   clipy:
     name: Clippy
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          -5432:5432
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: sqlx-${{env.SQLX_VERSION}}
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --locked --version=${{env.SQLX_VERSION}} --features ${{env.SQLX_FEATURES}}
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install postgresql-client -y
+      - name: Migrate database
+        run: SKIP_DOCKER=true ./scripts/initdb.sh
       - name: Linting
         run: cargo clippy -- -D warnings
   
   coverage:
     name: Code coverage
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          -5432:5432
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --locked --version=${{env.SQLX_VERSION}} --features ${{env.SQLX_FEATURES}}
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install postgresql-client -y
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: sqlx-${{env.SQLX_VERSION}}
+      - name: Migrate database
+        run: SKIP_DOCKER=true ./scripts/initdb.sh
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
       - name: Generate code coverage
