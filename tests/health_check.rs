@@ -1,6 +1,7 @@
+use sqlx::{Connection, PgConnection};
 use std::net::TcpListener;
 
-use zero2prod::startup;
+use zero2prod::{configuration, startup};
 
 fn spawn_app() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
@@ -46,6 +47,23 @@ async fn test_susbcribe_works_with_valid_data() {
         .expect("Failed to execute request");
 
     assert_eq!(response.status().as_u16(), 200);
+
+    // Assert that the actual db operation has been done
+    let config = configuration::get_configuration().expect("Failed to read configuration");
+    let connection_string = config.database.get_connection_string();
+
+    let mut connection = PgConnection::connect(&connection_string)
+        .await
+        .expect("Failed to connect to Postgres");
+
+    // sqlx::query!() defines a db_data struct at compile time with one field per column
+    let db_data = sqlx::query!("SELECT email, name FROM subscriptions",)
+        .fetch_one(&mut connection)
+        .await
+        .expect("Failed to fetch subscriptions");
+
+    assert_eq!(db_data.email, "ursula_le_guin@gmail.com");
+    assert_eq!(db_data.name, "le guin");
 }
 
 #[actix_web::test]
