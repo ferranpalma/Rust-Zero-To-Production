@@ -1,29 +1,71 @@
-use sqlx::{Connection, PgConnection};
+use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
+use uuid::Uuid;
 
-use zero2prod::{configuration, startup};
+use zero2prod::{
+    configuration::{self, get_configuration, DatabaseSettings},
+    startup,
+};
 
-fn spawn_app() -> String {
+pub struct TestingApp {
+    pub web_address: String,
+    pub db_pool: PgPool,
+}
+
+async fn spawn_app() -> TestingApp {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
+    let web_address = format!("http://127.0.0.1:{}", port);
 
-    let server = startup::run(listener).expect("Failed to bind address");
+    let mut config = get_configuration().expect("Failed to read configuration");
+    // Create a different db name for each test so every test is db isolated
+    config.database.name = Uuid::new_v4().to_string();
+    let db_pool = configure_testing_database(&config.database).await;
+
+    let server = startup::run(listener, db_pool.clone()).expect("Failed to bind address");
 
     let _ = tokio::spawn(server);
 
-    format!("http://127.0.0.1:{}", port)
+    TestingApp {
+        web_address,
+        db_pool,
+    }
+}
+
+async fn configure_testing_database(config: &DatabaseSettings) -> PgPool {
+    // Connect to postgres, not to a specific postgres database
+    let mut db_connection = PgConnection::connect(&config.get_connection_string_without_db())
+        .await
+        .expect("Failed to connect to Postgres");
+
+    // Create and migrate the database
+    db_connection
+        .execute(format!(r#"CREATE DATABASE "{}";"#, config.name).as_str())
+        .await
+        .expect("Failed to create database");
+
+    let db_pool = PgPool::connect(&config.get_connection_string())
+        .await
+        .expect("Failed to connect to Postgres");
+
+    sqlx::migrate!("./migrations")
+        .run(&db_pool)
+        .await
+        .expect("Failed to migrate database");
+
+    db_pool
 }
 
 #[actix_web::test]
 async fn test_health_check_works() {
     // The health check function should return a 200 OK with empty body
 
-    let address = spawn_app();
+    let app = spawn_app().await;
 
     let client = reqwest::Client::new();
 
     let response = client
-        .get(format!("{}/health_check", &address))
+        .get(format!("{}/health_check", &app.web_address))
         .send()
         .await
         .expect("Failed to execute the request");
@@ -34,12 +76,12 @@ async fn test_health_check_works() {
 
 #[actix_web::test]
 async fn test_susbcribe_works_with_valid_data() {
-    let address = spawn_app();
+    let app = spawn_app().await;
     let client = reqwest::Client::new();
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
     let response = client
-        .post(&format!("{}/subscriptions", &address))
+        .post(&format!("{}/subscriptions", &app.web_address))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body)
         .send()
@@ -68,7 +110,7 @@ async fn test_susbcribe_works_with_valid_data() {
 
 #[actix_web::test]
 async fn test_subscribe_fails_with_invalid_data() {
-    let address = spawn_app();
+    let app = spawn_app().await;
     let client = reqwest::Client::new();
     let cases = vec![
         ("name=le%guin", "missing email"),
@@ -78,7 +120,7 @@ async fn test_subscribe_fails_with_invalid_data() {
 
     for (case, error) in cases {
         let response = client
-            .post(&format!("{}/subscriptions", &address))
+            .post(&format!("{}/subscriptions", &app.web_address))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(case)
             .send()
