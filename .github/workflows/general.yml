@@ -39,9 +39,11 @@ jobs:
 
       - name: Rust cache action
         uses: Swatinem/rust-cache@v2
+        with:
+          key: sqlx-${{ env.SQLX_VERSION }}
 
       - name: Install sqlx-cli
-        run: cargo install sqlx-cli --no-default-features --locked --version=${{env.SQLX_VERSION}} --features ${{env.SQLX_FEATURES}}
+        run: cargo install sqlx-cli --version=${{env.SQLX_VERSION}} --features ${{env.SQLX_FEATURES}} --no-default-features --locked 
 
       - name: Install postgresql-client
         run: sudo apt-get update && sudo apt-get install postgresql-client -y
