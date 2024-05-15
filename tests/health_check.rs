@@ -3,7 +3,7 @@ use std::net::TcpListener;
 use uuid::Uuid;
 
 use zero2prod::{
-    configuration::{self, get_configuration, DatabaseSettings},
+    configuration::{get_configuration, DatabaseSettings},
     startup,
 };
 
@@ -91,16 +91,9 @@ async fn test_susbcribe_works_with_valid_data() {
     assert_eq!(response.status().as_u16(), 200);
 
     // Assert that the actual db operation has been done
-    let config = configuration::get_configuration().expect("Failed to read configuration");
-    let connection_string = config.database.get_connection_string();
-
-    let mut connection = PgConnection::connect(&connection_string)
-        .await
-        .expect("Failed to connect to Postgres");
-
     // sqlx::query!() defines a db_data struct at compile time with one field per column
     let db_data = sqlx::query!("SELECT email, name FROM subscriptions",)
-        .fetch_one(&mut connection)
+        .fetch_one(&app.db_pool)
         .await
         .expect("Failed to fetch subscriptions");
 
