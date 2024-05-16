@@ -10,16 +10,18 @@ async fn main() -> Result<(), std::io::Error> {
 
     telemetry::Telemetry::create("zero2prod".into(), "info".into(), std::io::stdout);
 
-    let db_connection_pool = PgPool::connect(
+    let db_connection_pool = PgPool::connect_lazy(
         configuration
             .database
             .get_connection_string()
             .expose_secret(),
     )
-    .await
     .expect("Failed to connect to Postgres");
 
-    let address = format!("127.0.0.1:{}", configuration.application_port);
+    let address = format!(
+        "{}:{}",
+        configuration.application.address, configuration.application.port
+    );
     let listener = TcpListener::bind(address)?;
     startup::run(listener, db_connection_pool)?.await
 }
