@@ -1,4 +1,9 @@
-use secrecy::{ExposeSecret, Secret, SecretString};
+use secrecy::{ExposeSecret, SecretString};
+use serde_aux::field_attributes::deserialize_number_from_string;
+use sqlx::{
+    postgres::{PgConnectOptions, PgSslMode},
+    ConnectOptions,
+};
 
 #[derive(serde::Deserialize)]
 pub struct Settings {
@@ -8,6 +13,7 @@ pub struct Settings {
 
 #[derive(serde::Deserialize)]
 pub struct ApplicationSettings {
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub address: String,
 }
@@ -17,8 +23,10 @@ pub struct DatabaseSettings {
     pub username: String,
     pub password: SecretString,
     pub host: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub name: String,
+    pub ssl: bool,
 }
 
 pub enum Environment {
@@ -65,32 +73,38 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
     let settings = config::Config::builder()
         .add_source(config::File::from(base_configuration_file))
         .add_source(config::File::from(env_configuration_file))
+        .add_source(
+            config::Environment::with_prefix("APP")
+                .prefix_separator("_")
+                .separator("__"),
+        )
         .build()?;
 
     settings.try_deserialize::<Settings>()
 }
 
 impl DatabaseSettings {
-    pub fn get_connection_string(&self) -> SecretString {
-        Secret::new(format!(
-            "postgres://{}:{}@{}:{}/{}",
-            self.username,
-            self.password.expose_secret(),
-            self.host,
-            self.port,
-            self.name
-        ))
+    pub fn connect_database_engine(&self) -> PgConnectOptions {
+        let ssl_mode = if self.ssl {
+            PgSslMode::Require
+        } else {
+            PgSslMode::Prefer
+        };
+
+        PgConnectOptions::new()
+            .host(&self.host)
+            .username(&self.username)
+            .password(self.password.expose_secret())
+            .port(self.port)
+            .ssl_mode(ssl_mode)
     }
 
-    pub fn get_connection_string_without_db(&self) -> SecretString {
+    pub fn connect_database_instance(&self) -> PgConnectOptions {
         // Creating a posgres string without a name establishes a connection postgres not with a
         // specific database in postgres
-        Secret::new(format!(
-            "postgres://{}:{}@{}:{}",
-            self.username,
-            self.password.expose_secret(),
-            self.host,
-            self.port
-        ))
+        self.connect_database_engine()
+            .database(&self.name)
+            // Set default level loging of sqlx to trace and reduce noise
+            .log_statements(log::LevelFilter::Trace)
     }
 }
