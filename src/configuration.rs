@@ -1,3 +1,5 @@
+use secrecy::{ExposeSecret, Secret, SecretString};
+
 #[derive(serde::Deserialize)]
 pub struct Settings {
     pub database: DatabaseSettings,
@@ -7,7 +9,7 @@ pub struct Settings {
 #[derive(serde::Deserialize)]
 pub struct DatabaseSettings {
     pub username: String,
-    pub password: String,
+    pub password: SecretString,
     pub host: String,
     pub port: u16,
     pub name: String,
@@ -27,19 +29,26 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
 }
 
 impl DatabaseSettings {
-    pub fn get_connection_string(&self) -> String {
-        format!(
+    pub fn get_connection_string(&self) -> SecretString {
+        Secret::new(format!(
             "postgres://{}:{}@{}:{}/{}",
-            self.username, self.password, self.host, self.port, self.name
-        )
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port,
+            self.name
+        ))
     }
 
-    pub fn get_connection_string_without_db(&self) -> String {
+    pub fn get_connection_string_without_db(&self) -> SecretString {
         // Creating a posgres string without a name establishes a connection postgres not with a
         // specific database in postgres
-        format!(
+        Secret::new(format!(
             "postgres://{}:{}@{}:{}",
-            self.username, self.password, self.host, self.port
-        )
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port
+        ))
     }
 }
