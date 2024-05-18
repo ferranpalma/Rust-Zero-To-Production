@@ -119,7 +119,8 @@ async fn test_subscribe_fails_with_invalid_data() {
     let cases = vec![
         ("name=le%guin", "missing email"),
         ("email=ursula_le_guin%40gmail.com", "missing name"),
-        ("", "missin name and email"),
+        ("name=&email=", "missing name and email"),
+        ("name=Ursula&email=definitely-not-an-email", "invalid email"),
     ];
 
     for (case, error) in cases {
