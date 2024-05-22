@@ -44,7 +44,7 @@ impl EmailClient {
         let request_body = EmailRequest {
             from: self.sender.as_ref(),
             to: recipient.as_ref(),
-            subject: subject,
+            subject,
             html_body: html_content,
             text_body: text_content,
         };
@@ -57,7 +57,8 @@ impl EmailClient {
             )
             .json(&request_body)
             .send()
-            .await?;
+            .await?
+            .error_for_status()?;
 
         Ok(())
     }
@@ -75,7 +76,7 @@ mod tests {
     };
     use secrecy::Secret;
     use wiremock::{
-        matchers::{header, header_exists, method, path},
+        matchers::{any, header, header_exists, method, path},
         Match, Mock, MockServer, ResponseTemplate,
     };
 
@@ -128,5 +129,57 @@ mod tests {
         // Once the mock server goes out of scope, it iterates and asserts all the Mocks
         // Ours expects to receive exactly one request, and that's the assertion that is gonna do
         // If this does not happen, the test fails
+    }
+
+    #[tokio::test]
+    async fn test_send_email_works_on_200_response() {
+        let server = MockServer::start().await;
+
+        let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
+        let authorization_token = Secret::new(Faker.fake());
+        let email_client = EmailClient::new(server.uri(), sender, authorization_token);
+
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let subscriber_email = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
+        let subject: String = Sentence(1..2).fake();
+        let content: String = Paragraph(1..10).fake();
+
+        // Sending the actual email towards the mock server
+        let response = email_client
+            .send_email(subscriber_email, &subject, &content, &content)
+            .await;
+
+        claims::assert_ok!(response);
+    }
+
+    #[tokio::test]
+    async fn test_send_email_fails_on_no_200_response() {
+        let server = MockServer::start().await;
+
+        let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
+        let authorization_token = Secret::new(Faker.fake());
+        let email_client = EmailClient::new(server.uri(), sender, authorization_token);
+
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(500))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let subscriber_email = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
+        let subject: String = Sentence(1..2).fake();
+        let content: String = Paragraph(1..10).fake();
+
+        // Sending the actual email towards the mock server
+        let response = email_client
+            .send_email(subscriber_email, &subject, &content, &content)
+            .await;
+
+        claims::assert_err!(response);
     }
 }
