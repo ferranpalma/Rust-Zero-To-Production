@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use zero2prod::{
     configuration::{get_configuration, DatabaseSettings},
+    email_client::EmailClient,
     startup, telemetry,
 };
 
@@ -28,12 +29,23 @@ async fn spawn_app() -> TestingApp {
     let port = listener.local_addr().unwrap().port();
     let web_address = format!("http://127.0.0.1:{}", port);
 
-    let mut config = get_configuration().expect("Failed to read configuration");
+    let mut configuration = get_configuration().expect("Failed to read configuration");
     // Create a different db name for each test so every test is db isolated
-    config.database.name = Uuid::new_v4().to_string();
-    let db_pool = configure_testing_database(&config.database).await;
+    configuration.database.name = Uuid::new_v4().to_string();
+    let db_pool = configure_testing_database(&configuration.database).await;
 
-    let server = startup::run(listener, db_pool.clone()).expect("Failed to bind address");
+    let sender_email = configuration
+        .email_client
+        .sender()
+        .expect("Invalid sender email address.");
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        sender_email,
+        configuration.email_client.authorization_token,
+    );
+
+    let server =
+        startup::run(listener, db_pool.clone(), email_client).expect("Failed to bind address");
 
     let _ = tokio::spawn(server);
 

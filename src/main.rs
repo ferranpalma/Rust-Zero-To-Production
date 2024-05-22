@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use std::net::TcpListener;
 
-use zero2prod::{configuration, startup, telemetry};
+use zero2prod::{configuration, email_client::EmailClient, startup, telemetry};
 
 #[actix_web::main]
 async fn main() -> Result<(), std::io::Error> {
@@ -12,10 +12,21 @@ async fn main() -> Result<(), std::io::Error> {
     let db_connection_pool =
         PgPool::connect_lazy_with(configuration.database.connect_database_instance());
 
+    // Build a SubscriberEmail instance
+    let sender_email = configuration
+        .email_client
+        .sender()
+        .expect("Invalid sender email address.");
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        sender_email,
+        configuration.email_client.authorization_token,
+    );
+
     let address = format!(
         "{}:{}",
         configuration.application.address, configuration.application.port
     );
     let listener = TcpListener::bind(address)?;
-    startup::run(listener, db_connection_pool)?.await
+    startup::run(listener, db_connection_pool, email_client)?.await
 }
