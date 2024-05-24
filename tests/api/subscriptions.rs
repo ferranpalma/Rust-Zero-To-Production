@@ -1,3 +1,8 @@
+use wiremock::{
+    matchers::{method, path},
+    Mock, ResponseTemplate,
+};
+
 use crate::helpers::spawn_app;
 
 #[actix_web::test]
@@ -25,7 +30,7 @@ async fn test_subscribe_fails_with_invalid_data() {
     let cases = vec![
         ("name=le%guin", "missing email"),
         ("email=ursula_le_guin%40gmail.com", "missing name"),
-        ("name=&email=", "missing name and email"),
+        ("name=&email=", "empty name and email"),
         ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
         ("name=Ursula&email=", "empty email"),
         ("name=Ursula&email=definitely-not-an-email", "invalid email"),
@@ -40,4 +45,21 @@ async fn test_subscribe_fails_with_invalid_data() {
             error
         );
     }
+}
+
+#[actix_web::test]
+async fn test_subscribe_sends_confirmation_email_for_valid_data() {
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    app.send_subscription_request(body.into()).await;
+
+    // Mock asserts on drop
 }
