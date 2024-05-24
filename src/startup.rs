@@ -14,6 +14,8 @@ pub struct Application {
     port: u16,
 }
 
+pub struct ApplicationBaseUrl(pub String);
+
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, std::io::Error> {
         let db_pool = Self::get_db_connection_pool(&configuration.database);
@@ -37,7 +39,12 @@ impl Application {
         let listener = TcpListener::bind(address)?;
 
         let port = listener.local_addr().unwrap().port();
-        let server = Self::get_server(listener, db_pool, email_client)?;
+        let server = Self::get_server(
+            listener,
+            db_pool,
+            email_client,
+            configuration.application.base_url,
+        )?;
 
         Ok(Self { server, port })
     }
@@ -60,10 +67,12 @@ impl Application {
         listener: TcpListener,
         db_pool: PgPool,
         email_client: EmailClient,
+        base_url: String,
     ) -> Result<Server, std::io::Error> {
         // Wrap the pool in web::Data, that ends up as an Arc pointer
         let db_connection = web::Data::new(db_pool);
         let email_client = web::Data::new(email_client);
+        let base_url = web::Data::new(ApplicationBaseUrl(base_url));
         let server = HttpServer::new(move || {
             App::new()
                 .wrap(TracingLogger::default())
@@ -72,6 +81,7 @@ impl Application {
                 .route("/subscriptions/confirm", web::get().to(confirm))
                 .app_data(db_connection.clone())
                 .app_data(email_client.clone())
+                .app_data(base_url.clone())
         })
         .listen(listener)?
         .run();
