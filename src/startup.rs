@@ -6,7 +6,7 @@ use tracing_actix_web::TracingLogger;
 use crate::{
     configuration::{DatabaseSettings, Settings},
     email_client::EmailClient,
-    routes::{health_check, subscriptions},
+    routes::{confirm, health_check, subscribe},
 };
 
 pub struct Application {
@@ -67,8 +67,9 @@ impl Application {
         let server = HttpServer::new(move || {
             App::new()
                 .wrap(TracingLogger::default())
-                .route("/health_check", web::get().to(health_check::health_check))
-                .route("/subscriptions", web::post().to(subscriptions::subscribe))
+                .route("/health_check", web::get().to(health_check))
+                .route("/subscriptions", web::post().to(subscribe))
+                .route("/subscriptions/confirm", web::get().to(confirm))
                 .app_data(db_connection.clone())
                 .app_data(email_client.clone())
         })
