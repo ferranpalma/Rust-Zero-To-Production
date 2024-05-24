@@ -15,7 +15,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub async fn build_server(configuration: Settings) -> Result<Self, std::io::Error> {
+    pub async fn build(configuration: Settings) -> Result<Self, std::io::Error> {
         let db_pool = Self::get_db_connection_pool(&configuration.database);
 
         let sender_email = configuration
@@ -37,7 +37,7 @@ impl Application {
         let listener = TcpListener::bind(address)?;
 
         let port = listener.local_addr().unwrap().port();
-        let server = run(listener, db_pool, email_client)?;
+        let server = Self::get_server(listener, db_pool, email_client)?;
 
         Ok(Self { server, port })
     }
@@ -55,26 +55,26 @@ impl Application {
     pub async fn run_application(self) -> Result<(), std::io::Error> {
         self.server.await
     }
-}
 
-pub fn run(
-    listener: TcpListener,
-    db_pool: PgPool,
-    email_client: EmailClient,
-) -> Result<Server, std::io::Error> {
-    // Wrap the pool in web::Data, that ends up as an Arc pointer
-    let db_connection = web::Data::new(db_pool);
-    let email_client = web::Data::new(email_client);
-    let server = HttpServer::new(move || {
-        App::new()
-            .wrap(TracingLogger::default())
-            .route("/health_check", web::get().to(health_check::health_check))
-            .route("/subscriptions", web::post().to(subscriptions::subscribe))
-            .app_data(db_connection.clone())
-            .app_data(email_client.clone())
-    })
-    .listen(listener)?
-    .run();
+    fn get_server(
+        listener: TcpListener,
+        db_pool: PgPool,
+        email_client: EmailClient,
+    ) -> Result<Server, std::io::Error> {
+        // Wrap the pool in web::Data, that ends up as an Arc pointer
+        let db_connection = web::Data::new(db_pool);
+        let email_client = web::Data::new(email_client);
+        let server = HttpServer::new(move || {
+            App::new()
+                .wrap(TracingLogger::default())
+                .route("/health_check", web::get().to(health_check::health_check))
+                .route("/subscriptions", web::post().to(subscriptions::subscribe))
+                .app_data(db_connection.clone())
+                .app_data(email_client.clone())
+        })
+        .listen(listener)?
+        .run();
 
-    Ok(server)
+        Ok(server)
+    }
 }

@@ -6,7 +6,7 @@ async fn main() -> Result<(), std::io::Error> {
 
     telemetry::Telemetry::create("zero2prod".into(), "info".into(), std::io::stdout);
 
-    let application = Application::build_server(configuration).await?;
+    let application = Application::build(configuration).await?;
 
     application.run_application().await?;
 
