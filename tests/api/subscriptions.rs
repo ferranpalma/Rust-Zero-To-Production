@@ -18,16 +18,30 @@ async fn test_susbcribe_works_with_valid_data() {
 
     let response = app.send_subscription_request(body.into()).await;
     assert_eq!(response.status().as_u16(), 200);
+}
+
+#[actix_web::test]
+async fn test_subscribe_persists_subscriber() {
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_server)
+        .await;
+
+    app.send_subscription_request(body.into()).await;
 
     // Assert that the actual db operation has been done
     // sqlx::query!() defines a db_data struct at compile time with one field per column
-    let db_data = sqlx::query!("SELECT email, name FROM subscriptions",)
+    let db_data = sqlx::query!("SELECT email, name, status FROM subscriptions",)
         .fetch_one(&app.db_pool)
         .await
         .expect("Failed to fetch subscriptions");
 
     assert_eq!(db_data.email, "ursula_le_guin@gmail.com");
     assert_eq!(db_data.name, "le guin");
+    assert_eq!(db_data.status, "pending_confirmation")
 }
 
 #[actix_web::test]
