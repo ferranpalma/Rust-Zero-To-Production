@@ -3,7 +3,10 @@ use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::types::{Subscriber, SubscriberEmail, SubscriberName};
+use crate::{
+    email_client::EmailClient,
+    types::{Subscriber, SubscriberEmail, SubscriberName},
+};
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
@@ -25,21 +28,42 @@ impl TryInto<Subscriber> for FormData {
 
 #[tracing::instrument(
     name = "Add new subscriber",
-    skip(form, db_pool),
+    skip(form, db_pool, email_client),
     fields(
         subscriber_name = %form.name,
         subscriber_email = %form.email
     )
 )]
-pub async fn subscribe(form: web::Form<FormData>, db_pool: web::Data<PgPool>) -> HttpResponse {
+pub async fn subscribe(
+    form: web::Form<FormData>,
+    db_pool: web::Data<PgPool>,
+    email_client: web::Data<EmailClient>,
+) -> HttpResponse {
     let subscriber = match form.0.try_into() {
         Ok(subscriber) => subscriber,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    match insert_susbcriber_db(&db_pool, &subscriber).await {
-        Ok(_) => HttpResponse::Ok().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+
+    if insert_susbcriber_db(&db_pool, &subscriber).await.is_err() {
+        return HttpResponse::InternalServerError().finish();
     }
+
+    // Once the subscriber is in the database, we send an confirmation email to them
+
+    if email_client
+        .send_email(
+            subscriber.email,
+            "Welcome",
+            "Welcome to our newsletter",
+            "Welcome to our newsletter",
+        )
+        .await
+        .is_err()
+    {
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    HttpResponse::Ok().finish()
 }
 
 #[tracing::instrument(

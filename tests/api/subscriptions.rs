@@ -10,6 +10,12 @@ async fn test_susbcribe_works_with_valid_data() {
     let app = spawn_app().await;
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_server)
+        .await;
+
     let response = app.send_subscription_request(body.into()).await;
     assert_eq!(response.status().as_u16(), 200);
 
