@@ -24,6 +24,11 @@ pub struct TestingApp {
     pub port: u16,
 }
 
+pub struct ConfirmationLink {
+    pub html_link: reqwest::Url,
+    pub text_link: reqwest::Url,
+}
+
 impl TestingApp {
     pub async fn send_subscription_request(&self, body: String) -> reqwest::Response {
         reqwest::Client::new()
@@ -33,6 +38,38 @@ impl TestingApp {
             .send()
             .await
             .expect("Failed to execute request")
+    }
+
+    pub fn get_confirmation_link(
+        &self,
+        email_client_response: &wiremock::Request,
+    ) -> ConfirmationLink {
+        let response_body: serde_json::Value =
+            serde_json::from_slice(&email_client_response.body).unwrap();
+
+        let get_link = |s: &str| {
+            let links: Vec<_> = linkify::LinkFinder::new()
+                .links(s)
+                .filter(|link| *link.kind() == linkify::LinkKind::Url)
+                .collect();
+            assert_eq!(links.len(), 1);
+
+            let raw_confirmation_link = links[0].as_str().to_owned();
+            let mut confirmation_link = reqwest::Url::parse(&raw_confirmation_link).unwrap();
+
+            assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1");
+
+            confirmation_link.set_port(Some(self.port)).unwrap();
+            confirmation_link
+        };
+
+        let html_link = get_link(response_body["HtmlBody"].as_str().unwrap());
+        let text_link = get_link(response_body["TextBody"].as_str().unwrap());
+
+        ConfirmationLink {
+            html_link,
+            text_link,
+        }
     }
 }
 
