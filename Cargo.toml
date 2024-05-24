@@ -28,6 +28,7 @@ tracing-actix-web = "0.7"
 secrecy = { version = "0.8", features = ["serde"] }
 unicode-segmentation = "1.11.0"
 validator = "0.18"
+rand = { version = "0.8", features = ["std_rng"] } 
 
 [patch.crates-io]
 config = { git = 'https://github.com/mehcode/config-rs.git'}
