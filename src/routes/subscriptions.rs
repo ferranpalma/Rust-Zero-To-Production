@@ -49,13 +49,20 @@ pub async fn subscribe(
     }
 
     // Once the subscriber is in the database, we send an confirmation email to them
-
+    let confirmation_link = "https://no-domain.com/subscriptions/confirm";
     if email_client
         .send_email(
             subscriber.email,
             "Welcome",
-            "Welcome to our newsletter",
-            "Welcome to our newsletter",
+            &format!(
+                "Welcome to my newsletter! <br />\
+            Click <a href=\"{}\">here</a> to confirm your subscription",
+                confirmation_link
+            ),
+            &format!(
+                "Welcom to our newsletter!\nVisit {} to confirm your subscription",
+                confirmation_link
+            ),
         )
         .await
         .is_err()
