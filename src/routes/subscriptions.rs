@@ -48,22 +48,7 @@ pub async fn subscribe(
         return HttpResponse::InternalServerError().finish();
     }
 
-    // Once the subscriber is in the database, we send an confirmation email to them
-    let confirmation_link = "https://no-domain.com/subscriptions/confirm";
-    if email_client
-        .send_email(
-            subscriber.email,
-            "Welcome",
-            &format!(
-                "Welcome to my newsletter! <br />\
-            Click <a href=\"{}\">here</a> to confirm your subscription",
-                confirmation_link
-            ),
-            &format!(
-                "Welcom to our newsletter!\nVisit {} to confirm your subscription",
-                confirmation_link
-            ),
-        )
+    if send_confirmation_email(&email_client, subscriber)
         .await
         .is_err()
     {
@@ -99,4 +84,28 @@ async fn insert_susbcriber_db(
     })?;
 
     Ok(())
+}
+
+#[tracing::instrument(
+    name = "Send a confirmation email to a new subscriber",
+    skip(email_client, subscriber)
+)]
+async fn send_confirmation_email(
+    email_client: &EmailClient,
+    subscriber: Subscriber,
+) -> Result<(), reqwest::Error> {
+    let confirmation_link = "https://no-domain.com/subscriptions/confirm";
+    let html_body = format!(
+        "Welcome to my newsletter! <br />\
+            Click <a href=\"{}\">here</a> to confirm your subscription",
+        confirmation_link
+    );
+    let text_body = format!(
+        "Welcom to our newsletter!\nVisit {} to confirm your subscription",
+        confirmation_link
+    );
+
+    email_client
+        .send_email(subscriber.email, "Welcome!", &html_body, &text_body)
+        .await
 }
