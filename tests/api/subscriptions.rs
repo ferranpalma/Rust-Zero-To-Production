@@ -3,17 +3,9 @@ use crate::helpers::spawn_app;
 #[actix_web::test]
 async fn test_susbcribe_works_with_valid_data() {
     let app = spawn_app().await;
-    let client = reqwest::Client::new();
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
-    let response = client
-        .post(&format!("{}/subscriptions", &app.web_address))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .await
-        .expect("Failed to execute request");
-
+    let response = app.send_subscription_request(body.into()).await;
     assert_eq!(response.status().as_u16(), 200);
 
     // Assert that the actual db operation has been done
@@ -30,23 +22,17 @@ async fn test_susbcribe_works_with_valid_data() {
 #[actix_web::test]
 async fn test_subscribe_fails_with_invalid_data() {
     let app = spawn_app().await;
-    let client = reqwest::Client::new();
     let cases = vec![
         ("name=le%guin", "missing email"),
         ("email=ursula_le_guin%40gmail.com", "missing name"),
         ("name=&email=", "missing name and email"),
+        ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
+        ("name=Ursula&email=", "empty email"),
         ("name=Ursula&email=definitely-not-an-email", "invalid email"),
     ];
 
     for (case, error) in cases {
-        let response = client
-            .post(&format!("{}/subscriptions", &app.web_address))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(case)
-            .send()
-            .await
-            .expect("Failed to execute request");
-
+        let response = app.send_subscription_request(case.into()).await;
         assert_eq!(
             response.status().as_u16(),
             400,
