@@ -71,6 +71,7 @@ pub async fn subscribe(
         .await
         .is_err()
     {
+        tracing::error!("Error when storing the token in the database");
         return HttpResponse::InternalServerError().finish();
     }
 
@@ -83,10 +84,12 @@ pub async fn subscribe(
     .await
     .is_err()
     {
+        tracing::error!("Error when sending the confirmation email");
         return HttpResponse::InternalServerError().finish();
     }
 
     if db_transaction.commit().await.is_err() {
+        tracing::error!("Unable to commit changes to the database");
         return HttpResponse::InternalServerError().finish();
     }
 
