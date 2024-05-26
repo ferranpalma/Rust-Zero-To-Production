@@ -1,4 +1,5 @@
 use actix_web::{web, HttpResponse};
+use askama_actix::Template;
 use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sqlx::{Executor, PgPool, Postgres, Transaction};
@@ -7,7 +8,7 @@ use uuid::Uuid;
 use crate::{
     email_client::EmailClient,
     startup::ApplicationBaseUrl,
-    types::{Subscriber, SubscriberEmail, SubscriberName},
+    types::{templates::ConfirmationEmailTemplate, Subscriber, SubscriberEmail, SubscriberName},
 };
 
 #[derive(serde::Deserialize)]
@@ -159,11 +160,14 @@ async fn send_confirmation_email(
         "{}/subscriptions/confirm?subscription_token={}",
         application_base_url, subscription_token
     );
-    let html_body = format!(
-        "Welcome to my newsletter! <br />\
-            Click <a href=\"{}\">here</a> to confirm your subscription",
-        confirmation_link
-    );
+
+    let html_body = ConfirmationEmailTemplate {
+        confirmation_link: &confirmation_link,
+    };
+    let html_body = html_body
+        .render()
+        .expect("Failed to render html for confirmation email");
+
     let text_body = format!(
         "Welcom to our newsletter!\nVisit {} to confirm your subscription",
         confirmation_link

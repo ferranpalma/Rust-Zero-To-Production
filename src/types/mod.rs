@@ -2,6 +2,7 @@ mod subscriber;
 mod subscriber_email;
 mod subscriber_name;
 mod subscription_token;
+pub mod templates;
 
 pub use subscriber::Subscriber;
 pub use subscriber_email::SubscriberEmail;

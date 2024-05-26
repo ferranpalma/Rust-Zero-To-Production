@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>{% block title %}{% endblock %}</title>
+    {% block head %}{% endblock %}
+</head>
+
+<body>
+    <div id="content">
+        {% block content %}
+        <h3> Welcome to the newsletter! </h3>
+        <p>Click <a href={{ confirmation_link }}>here</a> to confirm your subscription.</p>
+        {% endblock %}
+    </div>
+</body>
+
+</html>
