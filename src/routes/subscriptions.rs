@@ -161,7 +161,7 @@ async fn store_subscriber_token(
     db_transaction
         .execute(query)
         .await
-        .map_err(|e| StoreTokenError(e))?;
+        .map_err(StoreTokenError)?;
 
     Ok(())
 }
