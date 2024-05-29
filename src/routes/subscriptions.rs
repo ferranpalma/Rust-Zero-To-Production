@@ -1,4 +1,5 @@
 use actix_web::{http::StatusCode, web, HttpResponse, ResponseError};
+use anyhow::Context;
 use askama_actix::Template;
 use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -37,53 +38,26 @@ fn generate_token() -> String {
         .collect()
 }
 
-#[derive(Debug)]
+#[derive(thiserror::Error)]
 pub enum SubscribeError {
+    #[error("{0}")]
     ValidationError(String),
-    DatabaseError(sqlx::Error),
-    StoreTokenError(StoreTokenError),
-    SendEmailError(reqwest::Error),
+    #[error(transparent)]
+    UnexpectedError(#[from] anyhow::Error),
 }
 
-impl std::fmt::Display for SubscribeError {
+impl std::fmt::Debug for SubscribeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to create a new subscriber")
+        error_chain_fmt(self, f)
     }
 }
 
-impl std::error::Error for SubscribeError {}
 impl ResponseError for SubscribeError {
     fn status_code(&self) -> StatusCode {
         match self {
             SubscribeError::ValidationError(_) => StatusCode::BAD_REQUEST,
-            SubscribeError::DatabaseError(_)
-            | SubscribeError::StoreTokenError(_)
-            | SubscribeError::SendEmailError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SubscribeError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
-    }
-}
-
-impl From<reqwest::Error> for SubscribeError {
-    fn from(e: reqwest::Error) -> Self {
-        Self::SendEmailError(e)
-    }
-}
-
-impl From<sqlx::Error> for SubscribeError {
-    fn from(e: sqlx::Error) -> Self {
-        Self::DatabaseError(e)
-    }
-}
-
-impl From<StoreTokenError> for SubscribeError {
-    fn from(e: StoreTokenError) -> Self {
-        Self::StoreTokenError(e)
-    }
-}
-
-impl From<String> for SubscribeError {
-    fn from(e: String) -> Self {
-        Self::ValidationError(e)
     }
 }
 
@@ -101,19 +75,34 @@ pub async fn subscribe(
     email_client: web::Data<EmailClient>,
     application_base_url: web::Data<ApplicationBaseUrl>,
 ) -> Result<HttpResponse, SubscribeError> {
-    let subscriber = form.0.try_into()?;
-    let mut db_transaction = db_pool.begin().await?;
-    let subscriber_id = insert_susbcriber_db(&mut db_transaction, &subscriber).await?;
+    let subscriber = form.0.try_into().map_err(SubscribeError::ValidationError)?;
+
+    let mut db_transaction = db_pool
+        .begin()
+        .await
+        .context("Failed to acquire a Postgres connection from the pool.")?;
+    let subscriber_id = insert_susbcriber_db(&mut db_transaction, &subscriber)
+        .await
+        .context("Failed to insert new subscriber in the database.")?;
+
     let subscriber_token = generate_token();
-    store_subscriber_token(&mut db_transaction, subscriber_id, &subscriber_token).await?;
-    db_transaction.commit().await?;
+    store_subscriber_token(&mut db_transaction, subscriber_id, &subscriber_token)
+        .await
+        .context("Failed to store the confirmation token for a new subscriber.")?;
+
+    db_transaction
+        .commit()
+        .await
+        .context("Failed to commit SQL transaction for a new subscriber.")?;
+
     send_confirmation_email(
         &email_client,
         subscriber,
         &application_base_url.0,
         &subscriber_token,
     )
-    .await?;
+    .await
+    .context("Failed to send confirmation email.")?;
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -169,10 +158,10 @@ async fn store_subscriber_token(
         subscription_token,
         subscriber_id
     );
-    db_transaction.execute(query).await.map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        StoreTokenError(e)
-    })?;
+    db_transaction
+        .execute(query)
+        .await
+        .map_err(|e| StoreTokenError(e))?;
 
     Ok(())
 }
@@ -196,10 +185,7 @@ async fn insert_susbcriber_db(
         subscriber.name.as_ref(),
         Utc::now()
     );
-    db_transaction.execute(query).await.map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        e
-    })?;
+    db_transaction.execute(query).await?;
 
     Ok(subscriber_id)
 }
