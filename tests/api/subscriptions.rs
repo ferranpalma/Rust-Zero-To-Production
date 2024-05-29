@@ -86,3 +86,19 @@ async fn test_subscribe_sends_confirmation_email_for_valid_data() {
 
     assert_eq!(confirmation_links.html_link, confirmation_links.text_link)
 }
+
+#[actix_web::test]
+async fn test_subscribe_fails_with_db_error() {
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    // Sabotage DB
+    sqlx::query!("ALTER TABLE subscription_tokens DROP COLUMN subscription_token;",)
+        .execute(&app.db_pool)
+        .await
+        .unwrap();
+
+    let response = app.send_subscription_request(body.into()).await;
+
+    assert_eq!(response.status().as_u16(), 500);
+}
