@@ -102,3 +102,44 @@ async fn test_subscribe_fails_with_db_error() {
 
     assert_eq!(response.status().as_u16(), 500);
 }
+
+#[actix_web::test]
+async fn test_subscribe_twice_without_confirming() {
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_server)
+        .await;
+
+    let response = app.send_subscription_request(body.into()).await;
+    assert_eq!(response.status().as_u16(), 200);
+
+    // Resend petition without confirming
+    let response = app.send_subscription_request(body.into()).await;
+    assert_eq!(response.status().as_u16(), 200);
+}
+
+#[actix_web::test]
+async fn test_subscribe_twice_confirmed() {
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_server)
+        .await;
+
+    app.send_subscription_request(body.into()).await;
+
+    let email_client_response = &app.email_server.received_requests().await.unwrap()[0];
+    let confirmation_link = app.get_confirmation_link(email_client_response);
+
+    let response = reqwest::get(confirmation_link.text_link).await.unwrap();
+    assert_eq!(response.status().as_u16(), 200);
+
+    let response = app.send_subscription_request(body.into()).await;
+    assert_eq!(response.status().as_u16(), 500);
+}
