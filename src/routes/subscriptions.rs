@@ -154,7 +154,10 @@ async fn store_subscriber_token(
     subscription_token: &str,
 ) -> Result<(), StoreTokenError> {
     let query = sqlx::query!(
-        r#"INSERT INTO subscription_tokens (subscription_token, subscriber_id) VALUES ($1, $2)"#,
+        r#"
+            INSERT INTO subscription_tokens (subscription_token, subscriber_id) 
+            VALUES ($1, $2)
+        "#,
         subscription_token,
         subscriber_id
     );
@@ -179,6 +182,10 @@ async fn insert_susbcriber_db(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at, status)
         VALUES ($1, $2, $3, $4, 'pending_confirmation')
+        ON CONFLICT (email) 
+        DO UPDATE SET
+           id = EXCLUDED.id
+        WHERE subscriptions.status = 'pending_confirmation'
         "#,
         subscriber_id,
         subscriber.email.as_ref(),

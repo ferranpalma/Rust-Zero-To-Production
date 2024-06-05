@@ -67,6 +67,10 @@ pub async fn confirm(
         .await
         .context("Failed to update subscriber's status.")?;
 
+    delete_already_used_token(&db_pool, id)
+        .await
+        .context("Failed to delete all subscriber tokens from table.")?;
+
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -97,4 +101,21 @@ async fn get_subscriber_id(
     .fetch_optional(db_pool)
     .await?;
     Ok(result.map(|r| r.subscriber_id))
+}
+
+#[tracing::instrument(
+    name = "Delete subscriber from subscription_tokens table",
+    skip(db_pool, subscriber_id)
+)]
+async fn delete_already_used_token(
+    db_pool: &PgPool,
+    subscriber_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM subscription_tokens WHERE subscriber_id = $1",
+        subscriber_id
+    )
+    .execute(db_pool)
+    .await?;
+    Ok(())
 }
