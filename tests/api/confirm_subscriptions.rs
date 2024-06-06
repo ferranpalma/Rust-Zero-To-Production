@@ -86,7 +86,7 @@ async fn test_confirmation_link_changes_database_status() {
 }
 
 #[actix_web::test]
-async fn test_confirmed_subscribers_are_cleared_from_subscription_tokens_table() {
+async fn test_already_confirmed_subscriptor_works() {
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
@@ -97,23 +97,20 @@ async fn test_confirmed_subscribers_are_cleared_from_subscription_tokens_table()
         .await;
 
     app.send_subscription_request(body.into()).await;
-    app.send_subscription_request(body.into()).await;
-
-    let pending_subscriptors_count = sqlx::query!("SELECT COUNT(*) FROM subscription_tokens",)
-        .fetch_one(&app.db_pool)
-        .await
-        .unwrap();
-    assert_eq!(pending_subscriptors_count.count.unwrap(), 2);
 
     let email_client_response = &app.email_server.received_requests().await.unwrap()[0];
+    let second_email_client_response = &app.email_server.received_requests().await.unwrap()[1];
+
     let confirmation_link = app.get_confirmation_link(email_client_response);
+    let second_confirmation_link = app.get_confirmation_link(second_email_client_response);
 
-    let response = reqwest::get(confirmation_link.text_link).await.unwrap();
-    assert_eq!(response.status().as_u16(), 200);
+    // Fire first request
+    reqwest::get(confirmation_link.text_link).await.unwrap();
 
-    let pending_subscriptors_count = sqlx::query!("SELECT COUNT(*) FROM subscription_tokens",)
-        .fetch_one(&app.db_pool)
+    // Once confirmed, fire second request
+    let response = reqwest::get(second_confirmation_link.text_link)
         .await
         .unwrap();
-    assert_eq!(pending_subscriptors_count.count.unwrap(), 0);
+
+    assert_eq!(response.status().as_u16(), 200);
 }

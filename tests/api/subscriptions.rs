@@ -140,6 +140,7 @@ async fn test_subscribe_twice_confirmed() {
     let response = reqwest::get(confirmation_link.text_link).await.unwrap();
     assert_eq!(response.status().as_u16(), 200);
 
+    // Resend subscription request once already subscribed
     let response = app.send_subscription_request(body.into()).await;
     assert_eq!(response.status().as_u16(), 500);
 }
