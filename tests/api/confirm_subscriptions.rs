@@ -97,6 +97,7 @@ async fn test_already_confirmed_subscriptor_works() {
         .await;
 
     app.send_subscription_request(body.into()).await;
+    app.send_subscription_request(body.into()).await;
 
     let email_client_response = &app.email_server.received_requests().await.unwrap()[0];
     let second_email_client_response = &app.email_server.received_requests().await.unwrap()[1];
