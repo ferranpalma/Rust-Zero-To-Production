@@ -25,12 +25,7 @@ async fn test_mails_are_delivered_to_confirmed_subscribers() {
             "html": "<p>Newsletter body as HTML</p>",
         }
     });
-    let response = reqwest::Client::new()
-        .post(format!("{}/newsletters", &app.web_address))
-        .json(&newsletter_body)
-        .send()
-        .await
-        .expect("Failed to execute request");
+    let response = app.send_newsletter(newsletter_body).await;
     assert_eq!(response.status().as_u16(), 200);
 }
 
@@ -54,13 +49,40 @@ async fn test_mails_are_not_delivered_to_unconfirmed_subscribers() {
             "html": "<p>Newsletter body as HTML</p>",
         }
     });
-    let response = reqwest::Client::new()
-        .post(format!("{}/newsletters", &app.web_address))
-        .json(&newsletter_body)
-        .send()
-        .await
-        .expect("Failed to execute request");
+    let response = app.send_newsletter(newsletter_body).await;
     assert_eq!(response.status().as_u16(), 200);
+}
+
+#[actix_web::test]
+async fn test_newsletter_with_invalid_data_returns_400() {
+    let app = spawn_app().await;
+    let cases = vec![
+        (
+            serde_json::json!({
+                "content": {
+                    "text": "Newsletter body as plain text",
+                    "html": "<p>Newsletter body as HTML</p>",
+                }
+            }),
+            "missing title",
+        ),
+        (
+            serde_json::json!({
+                "title": "Newsletter"
+            }),
+            "missing content",
+        ),
+    ];
+
+    for (case, error) in cases {
+        let response = app.send_newsletter(case).await;
+        assert_eq!(
+            response.status().as_u16(),
+            400,
+            "The API did not fail with HTTP400 when the payload was {}",
+            error
+        );
+    }
 }
 
 async fn create_unconfirmed_subscriber(app: &TestingApp) -> ConfirmationLink {
