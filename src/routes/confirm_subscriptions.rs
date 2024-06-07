@@ -3,25 +3,11 @@ use anyhow::Context;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::types::SubscriptionToken;
+use crate::{routes::error_chain_fmt, types::SubscriptionToken};
 
 #[derive(serde::Deserialize)]
 pub struct QueryParameters {
     pub subscription_token: String,
-}
-
-fn error_chain_fmt(
-    e: &impl std::error::Error,
-    f: &mut std::fmt::Formatter<'_>,
-) -> std::fmt::Result {
-    writeln!(f, "{}\n", e)?;
-    let mut current = e.source();
-    while let Some(cause) = current {
-        writeln!(f, "Caused by:\n\t{}", cause)?;
-        current = cause.source();
-    }
-
-    Ok(())
 }
 
 #[derive(thiserror::Error)]
