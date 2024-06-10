@@ -41,7 +41,7 @@ impl EmailClient {
 
     pub async fn send_email(
         &self,
-        recipient: SubscriberEmail,
+        recipient: &SubscriberEmail,
         subject: &str,
         html_content: &str,
         text_content: &str,
@@ -144,7 +144,7 @@ mod tests {
 
         // Sending the actual email towards the mock server
         let _ = email_client
-            .send_email(get_email(), &get_subject(), &get_content(), &get_content())
+            .send_email(&get_email(), &get_subject(), &get_content(), &get_content())
             .await;
 
         // Once the mock server goes out of scope, it iterates and asserts all the Mocks
@@ -166,7 +166,7 @@ mod tests {
 
         // Sending the actual email towards the mock server
         let response = email_client
-            .send_email(get_email(), &get_subject(), &get_content(), &get_content())
+            .send_email(&get_email(), &get_subject(), &get_content(), &get_content())
             .await;
 
         claims::assert_ok!(response);
@@ -186,7 +186,7 @@ mod tests {
 
         // Sending the actual email towards the mock server
         let response = email_client
-            .send_email(get_email(), &get_subject(), &get_content(), &get_content())
+            .send_email(&get_email(), &get_subject(), &get_content(), &get_content())
             .await;
 
         claims::assert_err!(response);
@@ -206,7 +206,7 @@ mod tests {
 
         // Sending the actual email towards the mock server
         let response = email_client
-            .send_email(get_email(), &get_subject(), &get_content(), &get_content())
+            .send_email(&get_email(), &get_subject(), &get_content(), &get_content())
             .await;
 
         claims::assert_err!(response);
