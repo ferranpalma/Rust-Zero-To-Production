@@ -1,4 +1,5 @@
 use once_cell::sync::Lazy;
+use sha3::Digest;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 
@@ -22,6 +23,7 @@ pub struct TestingApp {
     pub db_pool: PgPool,
     pub email_server: MockServer,
     pub port: u16,
+    pub test_user: TestUser,
 }
 
 #[derive(Debug)]
@@ -42,10 +44,9 @@ impl TestingApp {
     }
 
     pub async fn send_newsletter(&self, body: serde_json::Value) -> reqwest::Response {
-        let (username, password) = self.get_test_user().await;
         reqwest::Client::new()
             .post(&format!("{}/newsletters", &self.web_address))
-            .basic_auth(username, Some(password))
+            .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(&body)
             .send()
             .await
@@ -83,15 +84,6 @@ impl TestingApp {
             text_link,
         }
     }
-
-    async fn get_test_user(&self) -> (String, String) {
-        let row = sqlx::query!("SELECT username, password FROM users LIMIT 1")
-            .fetch_one(&self.db_pool)
-            .await
-            .expect("Failed to retrieve test user.");
-
-        (row.username, row.password)
-    }
 }
 
 pub async fn spawn_app() -> TestingApp {
@@ -124,9 +116,13 @@ pub async fn spawn_app() -> TestingApp {
         db_pool: Application::get_db_connection_pool(&configuration.database),
         email_server,
         port,
+        test_user: TestUser::generate(),
     };
 
-    create_test_user(&testing_app.db_pool).await;
+    testing_app
+        .test_user
+        .store_in_db(&testing_app.db_pool)
+        .await;
 
     testing_app
 }
@@ -155,14 +151,32 @@ async fn configure_testing_database(config: &DatabaseSettings) -> PgPool {
     db_pool
 }
 
-async fn create_test_user(db_pool: &PgPool) {
-    sqlx::query!(
-        "INSERT INTO users (user_id, username, password) VALUES ($1, $2, $3)",
-        Uuid::new_v4(),
-        Uuid::new_v4().to_string(),
-        Uuid::new_v4().to_string()
-    )
-    .execute(db_pool)
-    .await
-    .expect("Failed to create test user");
+pub struct TestUser {
+    pub user_id: Uuid,
+    pub username: String,
+    pub password: String,
+}
+
+impl TestUser {
+    pub fn generate() -> Self {
+        Self {
+            user_id: Uuid::new_v4(),
+            username: Uuid::new_v4().to_string(),
+            password: Uuid::new_v4().to_string(),
+        }
+    }
+
+    async fn store_in_db(&self, db_pool: &PgPool) {
+        let password_hash = sha3::Sha3_256::digest(self.password.as_bytes());
+        let password_hash = format!("{:x}", password_hash);
+        sqlx::query!(
+            "INSERT INTO users (user_id, username, password_hash) VALUES ($1, $2, $3)",
+            self.user_id,
+            self.username,
+            password_hash
+        )
+        .execute(db_pool)
+        .await
+        .expect("Failed to store the test user");
+    }
 }
