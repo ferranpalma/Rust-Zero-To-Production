@@ -34,7 +34,7 @@ askama_actix = "0.14"
 thiserror = "1"
 anyhow = "1"
 base64 = "0.22"
-sha3 = "0.10"
+argon2 = { version = "0.5", features = ["std"] }
 
 [patch.crates-io]
 config = { git = 'https://github.com/mehcode/config-rs.git'}
