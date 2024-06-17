@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use wiremock::{
     matchers::{any, method, path},
     Mock, ResponseTemplate,
@@ -107,6 +108,64 @@ async fn test_newsletter_with_invalid_data_returns_400() {
             error
         );
     }
+}
+
+#[actix_web::test]
+async fn test_non_existing_user_is_rejected() {
+    let app = spawn_app().await;
+
+    let username = Uuid::new_v4().to_string();
+    let password = Uuid::new_v4().to_string();
+    assert_ne!(app.test_user.username, username);
+
+    let response = reqwest::Client::new()
+        .post(&format!("{}/newsletters", &app.web_address))
+        .basic_auth(username, Some(password))
+        .json(&serde_json::json!({
+                "title": "Newsletter title",
+                "content": {
+                    "text": "Newsletter body as plain text",
+                    "html": "<p>Newsletter body as HTML</p>"
+                }
+        }))
+        .send()
+        .await
+        .expect("Failed to execute request");
+
+    assert_eq!(response.status().as_u16(), 401);
+    assert_eq!(
+        r#"Basic realm="publish""#,
+        response.headers()["WWW-Authenticate"]
+    );
+}
+
+#[actix_web::test]
+async fn test_user_with_invalid_password_is_rejected() {
+    let app = spawn_app().await;
+
+    let username = &app.test_user.username;
+    let password = Uuid::new_v4().to_string();
+    assert_ne!(app.test_user.password, password);
+
+    let response = reqwest::Client::new()
+        .post(&format!("{}/newsletters", &app.web_address))
+        .basic_auth(username, Some(password))
+        .json(&serde_json::json!({
+                "title": "Newsletter title",
+                "content": {
+                    "text": "Newsletter body as plain text",
+                    "html": "<p>Newsletter body as HTML</p>"
+                }
+        }))
+        .send()
+        .await
+        .expect("Failed to execute request");
+
+    assert_eq!(response.status().as_u16(), 401);
+    assert_eq!(
+        r#"Basic realm="publish""#,
+        response.headers()["WWW-Authenticate"]
+    );
 }
 
 async fn create_unconfirmed_subscriber(app: &TestingApp) -> ConfirmationLink {
